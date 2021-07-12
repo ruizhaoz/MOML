@@ -22,6 +22,9 @@ The code,
 
 - Plots the CTM and LTM on tensorboard.
 
+You can change the configurations and save the losses for each round to run get hedge results by running
+
+```python hedge.py```
 ### Citation
 
 ```
