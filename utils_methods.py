@@ -5,10 +5,10 @@ from utils_general import *
 
 
 ### Methods
-def train_TuneFS(data_obj, learning_rate, batch_size, K, print_per, weight_decay, model_func,
+def train_FS(data_obj, learning_rate, batch_size, K, print_per, weight_decay, model_func,
               taskLrFT_GS, add_noFt, init_model, sch_step, sch_gamma, lr_decay_per_round,
               save_models, save_performance, save_tensorboard, suffix='', data_path=''):
-    suffix = 'TuneFS_' + suffix
+    suffix = 'FS_' + suffix
     suffix += '_Lr%f_B%d_K%d_W%f_fixed' % (learning_rate, batch_size, K, weight_decay)
     suffix += '_lrdecay%f_%d_%f' % (lr_decay_per_round, sch_step, sch_gamma)
 
@@ -43,9 +43,7 @@ def train_TuneFS(data_obj, learning_rate, batch_size, K, print_per, weight_decay
         # Each round is trained on previous all tasks
         for task in range(n_tasks):
             trn_x = np.concatenate(task_x[:task + 1]);
-            trn_y = np.concatenate(task_y[:task + 1])  # train on all previous tasks
-            tst_x = False;
-            tst_y = False
+
             print('---- Round %2d, Total datapoints: %5d' % (task + 1, len(trn_x)))
 
             # Start from the initial model
@@ -308,124 +306,6 @@ def train_TOE(data_obj, learning_rate, batch_size, K, print_per, weight_decay, m
         LTM_perf = np.load(path_ + '_LTM_perf.npy')
 
     return online_mdls, tst_after_perf, trn_after_perf, CTM_perf, LTM_perf
-
-def train_TFS(data_obj, learning_rate, batch_size, K, print_per, weight_decay, model_func,
-              init_model, sch_step, sch_gamma, lr_decay_per_round,
-              save_models, save_performance, save_tensorboard, suffix='', data_path=''):
-    suffix = 'TFS_' + suffix
-    suffix += '_Lr%f_B%d_K%d_W%f_fixed' % (learning_rate, batch_size, K, weight_decay)
-    suffix += '_lrdecay%f_%d_%f' % (lr_decay_per_round, sch_step, sch_gamma)
-
-    task_x = data_obj.trn_x;
-    task_y = data_obj.trn_y
-    dataset_name = data_obj.dataset
-    n_tasks = len(task_x)
-
-    if (save_models or save_performance) and (
-    not os.path.exists('%s/Model/%s/%s' % (data_path, data_obj.name, suffix))):
-        os.mkdir('%s/Model/%s/%s' % (data_path, data_obj.name, suffix))
-
-    online_mdls = [None] * n_tasks
-
-    tst_after_perf = np.zeros((n_tasks, n_tasks, 2))
-    trn_after_perf = np.zeros((n_tasks, 2))
-
-    CTM_perf = np.zeros((n_tasks, 2))
-    LTM_perf = np.zeros((n_tasks, 2))
-
-    writer = SummaryWriter('%s/Runs/%s/%s' % (data_path, data_obj.name, suffix)) if save_tensorboard else None
-
-    if not os.path.exists('%s/Model/%s/%s/%d_tst_after_perf.npy' % (data_path, data_obj.name, suffix, n_tasks)):
-        # Each round is trained on previous all tasks
-        for task in range(n_tasks):
-            trn_x = task_x[task]
-            trn_y = task_y[task]  # train on the current task
-            tst_x = False;
-            tst_y = False
-            print('---- Round %2d, Total datapoints: %5d' % (task + 1, len(trn_x)))
-
-            # Start from the initial model
-            _model = model_func().to(device)
-            _model.load_state_dict(copy.deepcopy(dict(init_model.named_parameters())))
-
-            decay = lr_decay_per_round ** task
-            _model = train_model(_model, trn_x, trn_y, tst_x, tst_y, learning_rate * decay, batch_size, K,
-                                 print_per, weight_decay, dataset_name, sch_step, sch_gamma)
-
-            # Evaluation of TFS is a bit different!
-            CTM_perf[task] = get_acc_loss(data_obj.tst_x[task], data_obj.tst_y[task], _model, dataset_name)
-
-            ### Evaluation
-            trn_after_perf[task] = get_acc_loss(task_x[task], task_y[task], _model, dataset_name)
-            for tt in range(task + 1):
-                tst_after_perf[task, tt] = get_acc_loss(data_obj.tst_x[tt], data_obj.tst_y[tt], _model, dataset_name)
-            print('\n*** Task %2d, Training   data, Accuracy: %.4f, Loss: %.4f'
-                  % (task + 1, trn_after_perf[task][1], trn_after_perf[task][0]))
-            print('*** Task %2d, Test       data, Accuracy: %.4f, Loss: %.4f\n'
-                  % (task + 1, tst_after_perf[task, task][1], tst_after_perf[task, task][0]))
-            LTM_perf[task] = np.mean(tst_after_perf[task, :task + 1, :], axis=0)
-
-            if save_tensorboard:
-                ## Loss
-                writer.add_scalar('Loss/Train_After', trn_after_perf[task, 0], task + 1)
-
-                writer.add_scalar('Loss/Train_After_Avg', np.mean(trn_after_perf[:task + 1, 0]), task + 1)
-
-                writer.add_scalar('Loss/CTM', CTM_perf[task, 0], task + 1)
-                writer.add_scalar('Loss/CTM_Avg', np.mean(CTM_perf[:task + 1, 0]), task + 1)
-
-                writer.add_scalar('Loss/LTM', LTM_perf[task, 0], task + 1)
-                writer.add_scalar('Loss/LTM_Avg', np.mean(LTM_perf[:task + 1, 0]), task + 1)
-
-                writer.add_scalar('Loss/Task_1', tst_after_perf[task, 0, 0], task + 1)
-
-                ## Accuracy
-                writer.add_scalar('Accuracy/Train_After', trn_after_perf[task, 1], task + 1)
-
-                writer.add_scalar('Accuracy/Train_After_Avg', np.mean(trn_after_perf[:task + 1, 1]), task + 1)
-
-                writer.add_scalar('Accuracy/CTM', CTM_perf[task, 1], task + 1)
-                writer.add_scalar('Accuracy/CTM_Avg', np.mean(CTM_perf[:task + 1, 1]), task + 1)
-
-                writer.add_scalar('Accuracy/LTM', LTM_perf[task, 1], task + 1)
-                writer.add_scalar('Accuracy/LTM_Avg', np.mean(LTM_perf[:task + 1, 1]), task + 1)
-
-                writer.add_scalar('Accuracy/Task_1', tst_after_perf[task, 0, 1], task + 1)
-
-            online_mdls[task] = _model
-
-            if save_models:
-                torch.save(_model.state_dict(), '%s/Model/%s/%s/%d_model.pt'
-                           % (data_path, data_obj.name, suffix, task + 1))
-
-        if save_performance:
-            # Save results
-            path_ = '%s/Model/%s/%s/%d' % (data_path, data_obj.name, suffix, n_tasks)
-
-            np.save(path_ + '_tst_after_perf.npy', tst_after_perf)
-            np.save(path_ + '_trn_after_perf.npy', trn_after_perf)
-
-            np.save(path_ + '_CTM_perf.npy', CTM_perf)
-            np.save(path_ + '_LTM_perf.npy', LTM_perf)
-    else:
-        # Load
-        if save_models:
-            for task in range(n_tasks):
-                _model = model_func().to(device)
-                _model.load_state_dict(torch.load('%s/Model/%s/%s/%d_model.pt'
-                                                  % (data_path, data_obj.name, suffix, task + 1)))
-                online_mdls[task] = _model
-
-        path_ = '%s/Model/%s/%s/%d' % (data_path, data_obj.name, suffix, n_tasks)
-
-        tst_after_perf = np.load(path_ + '_tst_after_perf.npy')
-        trn_after_perf = np.load(path_ + '_trn_after_perf.npy')
-
-        CTM_perf = np.load(path_ + '_CTM_perf.npy')
-        LTM_perf = np.load(path_ + '_LTM_perf.npy')
-
-    return online_mdls, tst_after_perf, trn_after_perf, CTM_perf, LTM_perf
-
 
 
 def train_FTML(data_obj, learning_rate, learning_rate_ft, batch_size, K, num_grad_step,

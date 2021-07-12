@@ -1,4 +1,3 @@
-from utils_general import *
 from utils_methods import *
 
 # Dataset initialization
@@ -59,7 +58,7 @@ taskLrFT_GS = [[0.1, 1], [0.1, 5]]
 add_noFt = True
 for K in K_list:
     print_per = K // 4 if K > 4 else 1
-    _ = train_TuneFS(data_obj=data_obj, learning_rate=learning_rate, batch_size=batch_size, K=K, print_per=print_per,
+    _ = train_FS(data_obj=data_obj, learning_rate=learning_rate, batch_size=batch_size, K=K, print_per=print_per,
                   weight_decay=weight_decay, model_func=model_func, init_model=init_model,
                   taskLrFT_GS=taskLrFT_GS, add_noFt=add_noFt,
                   sch_step=sch_step, sch_gamma=sch_gamma, lr_decay_per_round=lr_decay_per_round,
