@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="rzhu@128.197.189.163:22" autoUploadExternalChanges="true">
+    <serverData>
+      <paths name="rzhu@128.197.189.163:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/rzhu/code/MOML_final" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
